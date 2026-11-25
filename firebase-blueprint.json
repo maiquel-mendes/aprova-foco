@@ -1,0 +1,275 @@
+{
+  "entities": {
+    "UserAccount": {
+      "title": "UserAccount",
+      "description": "Authenticated user account, RBAC role, gamification metrics, and personal study preferences.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "email": { "type": "string", "format": "email", "minLength": 3, "maxLength": 160 },
+        "displayName": { "type": "string", "minLength": 2, "maxLength": 60 },
+        "avatarUrl": { "type": "string", "maxLength": 500 },
+        "role": { "type": "string", "enum": ["admin", "editor", "user"] },
+        "xp": { "type": "number" },
+        "level": { "type": "number" },
+        "streakDays": { "type": "number" },
+        "lastStudyDate": { "type": "string", "maxLength": 20 },
+        "planTier": { "type": "string", "enum": ["free", "premium_monthly", "premium_trial"] },
+        "dailyGoal": { "type": "number" },
+        "pushEnabled": { "type": "boolean" },
+        "preferredTheme": { "type": "string", "enum": ["light", "dark"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "displayName", "role", "xp", "level", "streakDays", "lastStudyDate", "planTier", "dailyGoal", "pushEnabled", "preferredTheme", "createdAt", "updatedAt"]
+    },
+    "RankingProfile": {
+      "title": "RankingProfile",
+      "description": "Public-safe leaderboard entry without PII.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "displayName": { "type": "string", "minLength": 2, "maxLength": 60 },
+        "xp": { "type": "number" },
+        "level": { "type": "number" },
+        "streakDays": { "type": "number" },
+        "bestScore": { "type": "number" },
+        "examsCount": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "displayName", "xp", "level", "streakDays", "bestScore", "examsCount", "updatedAt"]
+    },
+    "StudyProfile": {
+      "title": "StudyProfile",
+      "description": "Exam target profile per user.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "career": { "type": "string", "minLength": 2, "maxLength": 60 },
+        "targetBoard": { "type": "string", "minLength": 2, "maxLength": 40 },
+        "examDate": { "type": "string", "maxLength": 30 },
+        "dailyHours": { "type": "number" },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "name", "career", "targetBoard", "dailyHours", "isActive", "createdAt", "updatedAt"]
+    },
+    "QuestionAttempt": {
+      "title": "QuestionAttempt",
+      "description": "User answer record for a question.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "profileId": { "type": "string", "maxLength": 128 },
+        "questionId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "subject": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "topic": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "board": { "type": "string", "minLength": 2, "maxLength": 40 },
+        "selectedOption": { "type": "string", "minLength": 1, "maxLength": 5 },
+        "isCorrect": { "type": "boolean" },
+        "timeSpentSec": { "type": "number" },
+        "isBookmarked": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "questionId", "subject", "topic", "board", "selectedOption", "isCorrect", "timeSpentSec", "isBookmarked", "createdAt"]
+    },
+    "MockExam": {
+      "title": "MockExam",
+      "description": "Completed timed mock exam record.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "minLength": 2, "maxLength": 140 },
+        "board": { "type": "string", "minLength": 2, "maxLength": 40 },
+        "career": { "type": "string", "minLength": 2, "maxLength": 60 },
+        "durationMinutes": { "type": "number" },
+        "elapsedSeconds": { "type": "number" },
+        "totalQuestions": { "type": "number" },
+        "correctCount": { "type": "number" },
+        "wrongCount": { "type": "number" },
+        "blankCount": { "type": "number" },
+        "netScore": { "type": "number" },
+        "status": { "type": "string", "enum": ["completed"] },
+        "breakdownJson": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "title", "board", "career", "durationMinutes", "elapsedSeconds", "totalQuestions", "correctCount", "wrongCount", "blankCount", "netScore", "status", "breakdownJson", "createdAt"]
+    },
+    "StudySchedule": {
+      "title": "StudySchedule",
+      "description": "Weekly study schedule block.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "profileId": { "type": "string", "maxLength": 128 },
+        "dayOfWeek": { "type": "number" },
+        "startTime": { "type": "string", "minLength": 4, "maxLength": 10 },
+        "durationMinutes": { "type": "number" },
+        "subject": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "focusType": { "type": "string", "minLength": 2, "maxLength": 40 },
+        "completed": { "type": "boolean" },
+        "calendarEventId": { "type": "string", "maxLength": 256 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "dayOfWeek", "startTime", "durationMinutes", "subject", "focusType", "completed", "createdAt", "updatedAt"]
+    },
+    "UserAchievement": {
+      "title": "UserAchievement",
+      "description": "Unlocked gamification badge.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "badgeKey": { "type": "string", "minLength": 2, "maxLength": 60 },
+        "title": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "description": { "type": "string", "minLength": 2, "maxLength": 240 },
+        "unlockedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "badgeKey", "title", "description", "unlockedAt"]
+    },
+    "Question": {
+      "title": "Question",
+      "description": "Commented public exam question managed by admins and editors.",
+      "type": "object",
+      "properties": {
+        "code": { "type": "string", "minLength": 3, "maxLength": 40 },
+        "board": { "type": "string", "minLength": 2, "maxLength": 40 },
+        "career": { "type": "string", "minLength": 2, "maxLength": 60 },
+        "subject": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "topic": { "type": "string", "minLength": 2, "maxLength": 140 },
+        "organ": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "year": { "type": "number" },
+        "difficulty": { "type": "string", "enum": ["Fácil", "Média", "Difícil"] },
+        "questionType": { "type": "string", "enum": ["multiple_choice", "true_false"] },
+        "statement": { "type": "string", "minLength": 10, "maxLength": 5000 },
+        "optionsJson": { "type": "array" },
+        "correctOption": { "type": "string", "minLength": 1, "maxLength": 5 },
+        "commentary": { "type": "string", "minLength": 5, "maxLength": 5000 },
+        "sourceType": { "type": "string", "enum": ["curated", "pdf_import", "portal_scrape"] },
+        "pdfImportId": { "type": "string", "maxLength": 128 },
+        "createdByUserId": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["code", "board", "career", "subject", "topic", "organ", "year", "difficulty", "questionType", "statement", "optionsJson", "correctOption", "commentary", "sourceType", "createdByUserId", "createdAt", "updatedAt"]
+    },
+    "PdfImport": {
+      "title": "PdfImport",
+      "description": "Imported PDF exam batch created by admins or editors.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "minLength": 2, "maxLength": 160 },
+        "fileName": { "type": "string", "minLength": 2, "maxLength": 160 },
+        "board": { "type": "string", "minLength": 2, "maxLength": 40 },
+        "career": { "type": "string", "minLength": 2, "maxLength": 60 },
+        "year": { "type": "number" },
+        "extractedCount": { "type": "number" },
+        "status": { "type": "string", "enum": ["processed"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "title", "fileName", "board", "career", "year", "extractedCount", "status", "createdAt"]
+    },
+    "ScrapeJob": {
+      "title": "ScrapeJob",
+      "description": "Official portal scraping job log restricted to admins.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "sourceName": { "type": "string", "minLength": 2, "maxLength": 160 },
+        "sourceUrl": { "type": "string", "minLength": 8, "maxLength": 500 },
+        "board": { "type": "string", "minLength": 2, "maxLength": 40 },
+        "career": { "type": "string", "minLength": 2, "maxLength": 60 },
+        "questionsImported": { "type": "number" },
+        "status": { "type": "string", "enum": ["completed"] },
+        "summary": { "type": "string", "maxLength": 600 },
+        "ranAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "sourceName", "sourceUrl", "board", "career", "questionsImported", "status", "summary", "ranAt"]
+    },
+    "ForumPost": {
+      "title": "ForumPost",
+      "description": "Community Q&A forum thread.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "questionId": { "type": "string", "maxLength": 128 },
+        "subject": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "title": { "type": "string", "minLength": 3, "maxLength": 140 },
+        "body": { "type": "string", "minLength": 3, "maxLength": 3000 },
+        "authorName": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "upvotes": { "type": "number" },
+        "repliesJson": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "subject", "title", "body", "authorName", "upvotes", "repliesJson", "createdAt", "updatedAt"]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "Study room chat message.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "room": { "type": "string", "minLength": 2, "maxLength": 40 },
+        "authorName": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "authorLevel": { "type": "number" },
+        "message": { "type": "string", "minLength": 1, "maxLength": 800 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "room", "authorName", "authorLevel", "message", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserAccount" },
+      "description": "Private user account with RBAC role and preferences."
+    },
+    "/rankings/{userId}": {
+      "schema": { "$ref": "#/entities/RankingProfile" },
+      "description": "Public-safe leaderboard projection per user."
+    },
+    "/users/{userId}/profiles/{profileId}": {
+      "schema": { "$ref": "#/entities/StudyProfile" },
+      "description": "Exam target study profiles owned by userId."
+    },
+    "/users/{userId}/attempts/{attemptId}": {
+      "schema": { "$ref": "#/entities/QuestionAttempt" },
+      "description": "Question attempt history owned by userId."
+    },
+    "/users/{userId}/mockExams/{examId}": {
+      "schema": { "$ref": "#/entities/MockExam" },
+      "description": "Completed timed mock exams owned by userId."
+    },
+    "/users/{userId}/schedules/{scheduleId}": {
+      "schema": { "$ref": "#/entities/StudySchedule" },
+      "description": "Weekly study schedule blocks owned by userId."
+    },
+    "/users/{userId}/achievements/{badgeKey}": {
+      "schema": { "$ref": "#/entities/UserAchievement" },
+      "description": "Gamification badges unlocked by userId."
+    },
+    "/questions/{questionId}": {
+      "schema": { "$ref": "#/entities/Question" },
+      "description": "Commented exam questions readable by signed-in users, writable by admins and editors."
+    },
+    "/pdfImports/{pdfId}": {
+      "schema": { "$ref": "#/entities/PdfImport" },
+      "description": "PDF extraction batches accessible only to admins and editors."
+    },
+    "/scrapeJobs/{jobId}": {
+      "schema": { "$ref": "#/entities/ScrapeJob" },
+      "description": "Official portal scraping logs accessible only to admins."
+    },
+    "/forumPosts/{postId}": {
+      "schema": { "$ref": "#/entities/ForumPost" },
+      "description": "Community forum Q&A threads."
+    },
+    "/chatMessages/{messageId}": {
+      "schema": { "$ref": "#/entities/ChatMessage" },
+      "description": "Community room chat messages."
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "AprovaFoco",
+  "description": "Plataforma inteligente de estudos para concursos públicos com banco de questões comentadas, extração de PDFs via IA, simulados cronometrados e análise adaptativa.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
