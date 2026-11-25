@@ -13,16 +13,7 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import { apiFetch } from '../lib/api';
-import { getWorkspaceAccessToken, signInWithGoogle } from '../lib/firebase';
-import {
-  createScheduleItem,
-  deleteScheduleItem,
-  exportUserBackupFromFirestore,
-  fetchAnalyticsFromFirestore,
-  fetchSchedules,
-  updateMyPreferences,
-  updateScheduleItem,
-} from '../lib/firestoreDb';
+import { getAuthProvider, getRepositories } from '../repositories';
 import {
   syncScheduleToGoogleCalendar,
   uploadBackupToGoogleDrive,
@@ -60,6 +51,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onUserUpdated,
   onNavigateQuestions,
 }) => {
+  const repos = getRepositories();
+  const authProvider = getAuthProvider();
   const [subjectStats, setSubjectStats] = useState<SubjectStat[]>([]);
   const [schedules, setSchedules] = useState<StudyScheduleItem[]>([]);
   const [diagnosis, setDiagnosis] = useState<AdaptiveDiagnosis | null>(null);
@@ -81,15 +74,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const loadDashboardData = useCallback(async () => {
     try {
       const [analyticsRes, schedRes] = await Promise.all([
-        fetchAnalyticsFromFirestore(user.uid),
-        fetchSchedules(user.uid),
+        repos.dashboard.getAnalytics(user.uid),
+        repos.dashboard.listSchedules(user.uid),
       ]);
       setSubjectStats(analyticsRes.subjectStats);
       setSchedules(schedRes);
     } catch {
       // Keep UI interactive if offline
     }
-  }, [user.uid]);
+  }, [repos, user.uid]);
 
   useEffect(() => {
     loadDashboardData();
@@ -99,7 +92,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     setLoadingAi(true);
     setError(null);
     try {
-      const analytics = await fetchAnalyticsFromFirestore(user.uid);
+      const analytics = await repos.dashboard.getAnalytics(user.uid);
       const res = await apiFetch<{ diagnosis: AdaptiveDiagnosis }>(
         '/api/ai/adaptive-plan',
         {
@@ -126,7 +119,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const handleAddSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const created = await createScheduleItem(user.uid, {
+      const created = await repos.dashboard.createSchedule(user.uid, {
         dayOfWeek: newDay,
         startTime: newTime,
         durationMinutes: 90,
@@ -146,7 +139,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     durationMinutes: number;
   }) => {
     try {
-      const created = await createScheduleItem(user.uid, {
+      const created = await repos.dashboard.createSchedule(user.uid, {
         dayOfWeek: new Date().getDay(),
         startTime: '20:00',
         durationMinutes: block.durationMinutes,
@@ -162,7 +155,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   const handleToggleSchedule = async (item: StudyScheduleItem) => {
     try {
-      const updated = await updateScheduleItem(user.uid, item.id, {
+      const updated = await repos.dashboard.updateSchedule(user.uid, item.id, {
         completed: !item.completed,
       });
       setSchedules((prev) =>
@@ -175,7 +168,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   const handleDeleteSchedule = async (id: string) => {
     try {
-      await deleteScheduleItem(user.uid, id);
+      await repos.dashboard.deleteSchedule(user.uid, id);
       setSchedules((prev) => prev.filter((s) => s.id !== id));
     } catch (err: any) {
       setError(err?.message || 'Erro ao excluir bloco.');
@@ -183,9 +176,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   };
 
   const ensureWorkspaceToken = async (): Promise<string> => {
-    const existing = getWorkspaceAccessToken();
+    if (!authProvider.supportsGoogleWorkspace) {
+      throw new Error(
+        'A sincronização com Google Workspace está disponível apenas no modo Google/Firebase.'
+      );
+    }
+    const existing = authProvider.getWorkspaceAccessToken();
     if (existing) return existing;
-    const res = await signInWithGoogle();
+    const res = await authProvider.signInWithGoogle();
     if (!res.workspaceToken) {
       throw new Error(
         'Permissão do Google Calendar/Drive não retornada. Tente novamente.'
@@ -204,7 +202,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         token,
         calendarConfirmItem
       );
-      const updated = await updateScheduleItem(
+      const updated = await repos.dashboard.updateSchedule(
         user.uid,
         calendarConfirmItem.id,
         { calendarEventId: eventId }
@@ -227,13 +225,37 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     setWorkspaceBusy(true);
     setError(null);
     try {
-      const backupPayload = await exportUserBackupFromFirestore(user);
+      const backupPayload = await repos.dashboard.exportBackup(user);
       const token = await ensureWorkspaceToken();
       const uploaded = await uploadBackupToGoogleDrive(token, backupPayload);
       setNotice(`Backup salvo no seu Google Drive: ${uploaded.name}`);
       setDriveConfirmOpen(false);
     } catch (err: any) {
       setError(err?.message || 'Falha ao enviar backup para o Google Drive.');
+    } finally {
+      setWorkspaceBusy(false);
+    }
+  };
+
+  const handleDownloadLocalBackup = async () => {
+    setWorkspaceBusy(true);
+    setError(null);
+    try {
+      const backupPayload = await repos.dashboard.exportBackup(user);
+      const blob = new Blob([JSON.stringify(backupPayload, null, 2)], {
+        type: 'application/json',
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `aprovafoco-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setNotice('Backup JSON exportado localmente com sucesso.');
+    } catch (err: any) {
+      setError(err?.message || 'Falha ao exportar backup JSON.');
     } finally {
       setWorkspaceBusy(false);
     }
@@ -250,7 +272,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       return;
     }
     try {
-      const updatedUser = await updateMyPreferences(user.uid, {
+      const updatedUser = await repos.users.updatePreferences(user.uid, {
         pushEnabled: true,
       });
       onUserUpdated(updatedUser);
@@ -626,14 +648,26 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               {user.pushEnabled ? 'Notificações Ativas' : 'Ativar Lembretes Push'}
             </button>
 
-            <button
-              type="button"
-              onClick={() => setDriveConfirmOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
-            >
-              <CloudUpload className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-              Backup no Google Drive
-            </button>
+            {authProvider.supportsGoogleWorkspace ? (
+              <button
+                type="button"
+                onClick={() => setDriveConfirmOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
+              >
+                <CloudUpload className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                Backup no Google Drive
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleDownloadLocalBackup}
+                disabled={workspaceBusy}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer disabled:opacity-50"
+              >
+                <CloudUpload className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                Exportar Backup JSON
+              </button>
+            )}
           </div>
         </div>
 
@@ -719,20 +753,22 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </button>
 
               <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setCalendarConfirmItem(item)}
-                  className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium cursor-pointer ${
-                    item.calendarEventId
-                      ? 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300'
-                      : 'border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
-                  }`}
-                >
-                  <Calendar className="w-3.5 h-3.5" />
-                  {item.calendarEventId
-                    ? 'Sincronizado na Agenda'
-                    : 'Enviar ao Calendar'}
-                </button>
+                {authProvider.supportsGoogleWorkspace && (
+                  <button
+                    type="button"
+                    onClick={() => setCalendarConfirmItem(item)}
+                    className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium cursor-pointer ${
+                      item.calendarEventId
+                        ? 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300'
+                        : 'border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    <Calendar className="w-3.5 h-3.5" />
+                    {item.calendarEventId
+                      ? 'Sincronizado na Agenda'
+                      : 'Enviar ao Calendar'}
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => handleDeleteSchedule(item.id)}

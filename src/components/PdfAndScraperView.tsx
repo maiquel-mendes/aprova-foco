@@ -10,15 +10,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { apiFetch } from '../lib/api';
-import {
-  commitPdfQuestionsToFirestore,
-  deletePdfImportAndQuestions,
-  fetchAdminUsers,
-  fetchPdfImports,
-  fetchScrapeHistory,
-  saveScrapedQuestionsToFirestore,
-  updateUserRoleByAdmin,
-} from '../lib/firestoreDb';
+import { getRepositories } from '../repositories';
 import type {
   AdminUserItem,
   PdfImportHistory,
@@ -54,6 +46,7 @@ export const PdfAndScraperView: React.FC<PdfAndScraperViewProps> = ({
   onUserUpdated,
   onQuestionsAdded,
 }) => {
+  const repos = getRepositories();
   const userRole = user.role;
   const currentUserId = user.uid;
   const isAdmin = userRole === 'admin';
@@ -103,14 +96,14 @@ export const PdfAndScraperView: React.FC<PdfAndScraperViewProps> = ({
 
   const loadMetadata = useCallback(async () => {
     try {
-      const pdfs = await fetchPdfImports(user.uid, user.email);
+      const pdfs = await repos.pdfImports.listImports(user.uid, user.email);
       setPdfHistory(pdfs);
 
       if (isAdmin) {
         const [srcRes, jobs, usersList] = await Promise.all([
           apiFetch<{ sources: ScrapeSourcePreset[] }>('/api/scraper/sources'),
-          fetchScrapeHistory(user.uid, user.email),
-          fetchAdminUsers(user.uid, user.email),
+          repos.scraper.listHistory(user.uid, user.email),
+          repos.users.listAdminUsers(user.uid, user.email),
         ]);
         setSources(srcRes.sources);
         setScrapeHistory(jobs);
@@ -119,7 +112,7 @@ export const PdfAndScraperView: React.FC<PdfAndScraperViewProps> = ({
     } catch {
       // Ignore secondary metadata error on initial load
     }
-  }, [isAdmin, user.uid, user.email]);
+  }, [isAdmin, repos, user.uid, user.email]);
 
   useEffect(() => {
     loadMetadata();
@@ -170,7 +163,7 @@ export const PdfAndScraperView: React.FC<PdfAndScraperViewProps> = ({
     setCommitting(true);
     setErrorMsg(null);
     try {
-      const res = await commitPdfQuestionsToFirestore(user.uid, {
+      const res = await repos.pdfImports.commitExtracted(user.uid, {
         title:
           title.trim() ||
           selectedFile?.name.replace(/\.pdf$/i, '') ||
@@ -183,7 +176,7 @@ export const PdfAndScraperView: React.FC<PdfAndScraperViewProps> = ({
       });
       if (res.user) onUserUpdated(res.user);
       setStatusMsg(
-        `${res.insertedCount} questões salvas no banco na nuvem (+60 XP conquistados).`
+        `${res.insertedCount} questões salvas no banco (+60 XP conquistados).`
       );
       setDrafts([]);
       setSelectedFile(null);
@@ -230,7 +223,7 @@ export const PdfAndScraperView: React.FC<PdfAndScraperViewProps> = ({
         body: JSON.stringify(payload),
       });
 
-      const saved = await saveScrapedQuestionsToFirestore(user.uid, {
+      const saved = await repos.scraper.saveScraped(user.uid, {
         sourceName: scraped.sourceName,
         sourceUrl: scraped.sourceUrl,
         board: scraped.board,
@@ -257,7 +250,7 @@ export const PdfAndScraperView: React.FC<PdfAndScraperViewProps> = ({
     setDeletingPdf(true);
     setErrorMsg(null);
     try {
-      await deletePdfImportAndQuestions(pdfDeleteTarget.id);
+      await repos.pdfImports.deleteImport(pdfDeleteTarget.id);
       setPdfHistory((prev) =>
         prev.filter((item) => item.id !== pdfDeleteTarget.id)
       );
@@ -278,7 +271,7 @@ export const PdfAndScraperView: React.FC<PdfAndScraperViewProps> = ({
     setErrorMsg(null);
     setStatusMsg(null);
     try {
-      const updated = await updateUserRoleByAdmin(
+      const updated = await repos.users.updateUserRole(
         userId,
         nextRole,
         adminUsers
@@ -499,7 +492,7 @@ export const PdfAndScraperView: React.FC<PdfAndScraperViewProps> = ({
                 >
                   <PlusCircle className="w-4 h-4" />
                   {committing
-                    ? 'Gravando na nuvem...'
+                    ? 'Gravando no banco...'
                     : `Salvar ${drafts.length} Questões no Banco`}
                 </button>
               </div>

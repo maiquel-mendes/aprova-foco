@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { BookOpen, FileText, BrainCircuit, Trophy, Moon, Sun } from 'lucide-react';
-import { signInWithGoogle } from '../lib/firebase';
+import { BookOpen, FileText, BrainCircuit, Trophy, Moon, Sun, Lock } from 'lucide-react';
+import { getAuthProvider } from '../repositories';
 import { PWAInstallButton } from './PWAInstallButton';
 
 interface SignInScreenProps {
@@ -14,20 +14,46 @@ export const SignInScreen: React.FC<SignInScreenProps> = ({
   onToggleTheme,
   onSuccess,
 }) => {
+  const authProvider = getAuthProvider();
+  const isLocalAuth = authProvider.mode === 'local';
+
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [imgFailed, setImgFailed] = useState(false);
 
-  const handleLogin = async () => {
+  const [authTab, setAuthTab] = useState<'login' | 'register'>('login');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [displayName, setDisplayName] = useState('');
+
+  const handleGoogleLogin = async () => {
     setIsLoading(true);
     setError(null);
     try {
-      await signInWithGoogle();
+      await authProvider.signInWithGoogle();
       onSuccess();
     } catch (err: any) {
       setError(
         err?.message || 'Não foi possível concluir o login com o Google.'
       );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleLocalSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError(null);
+    try {
+      if (authTab === 'register' && authProvider.registerWithPassword) {
+        await authProvider.registerWithPassword(email, password, displayName);
+      } else if (authProvider.signInWithPassword) {
+        await authProvider.signInWithPassword(email, password);
+      }
+      onSuccess();
+    } catch (err: any) {
+      setError(err?.message || 'Não foi possível autenticar.');
     } finally {
       setIsLoading(false);
     }
@@ -80,29 +106,119 @@ export const SignInScreen: React.FC<SignInScreenProps> = ({
             </h1>
 
             <p className="mt-5 text-base sm:text-lg leading-relaxed text-slate-600 dark:text-slate-300 max-w-xl">
-              Organize seu edital na nuvem, transforme provas em PDF em cadernos interativos, acompanhe seu desempenho por matéria e sincronize sua rotina no Google Calendar.
+              Organize seu edital, transforme provas em PDF em cadernos interativos, acompanhe seu desempenho por matéria e mantenha sua constância diária.
             </p>
 
-            <div className="mt-8 flex flex-wrap items-center gap-4">
-              <button
-                type="button"
-                onClick={handleLogin}
-                disabled={isLoading}
-                className="inline-flex items-center gap-3 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 px-5 py-3 text-sm font-semibold text-slate-800 dark:text-slate-100 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer disabled:opacity-60"
-              >
-                <svg className="w-5 h-5 shrink-0" viewBox="0 0 48 48" aria-hidden="true">
-                  <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
-                  <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
-                  <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
-                  <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
-                </svg>
-                {isLoading ? 'Conectando sua conta...' : 'Entrar com Google'}
-              </button>
+            {isLocalAuth ? (
+              <div className="mt-8 max-w-md rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 space-y-4 shadow-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="inline-flex rounded-lg bg-slate-100 dark:bg-slate-800 p-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAuthTab('login');
+                        setError(null);
+                      }}
+                      className={`px-3 py-1.5 text-xs font-semibold rounded-md cursor-pointer ${
+                        authTab === 'login'
+                          ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm'
+                          : 'text-slate-600 dark:text-slate-300'
+                      }`}
+                    >
+                      Entrar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAuthTab('register');
+                        setError(null);
+                      }}
+                      className={`px-3 py-1.5 text-xs font-semibold rounded-md cursor-pointer ${
+                        authTab === 'register'
+                          ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm'
+                          : 'text-slate-600 dark:text-slate-300'
+                      }`}
+                    >
+                      Criar Conta
+                    </button>
+                  </div>
+                  <span className="text-[11px] font-mono-num text-slate-500 dark:text-slate-400">
+                    PostgreSQL Local
+                  </span>
+                </div>
 
-              <span className="text-xs text-slate-500 dark:text-slate-400">
-                Acesso completo liberado para avaliação inicial
-              </span>
-            </div>
+                <form onSubmit={handleLocalSubmit} className="space-y-3">
+                  {authTab === 'register' && (
+                    <input
+                      type="text"
+                      value={displayName}
+                      onChange={(e) => setDisplayName(e.target.value)}
+                      placeholder="Nome completo"
+                      required
+                      minLength={2}
+                      maxLength={60}
+                      className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 px-3.5 py-2.5 text-sm"
+                    />
+                  )}
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="E-mail"
+                    required
+                    className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 px-3.5 py-2.5 text-sm"
+                  />
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Senha (mínimo 8 caracteres)"
+                    required
+                    minLength={8}
+                    className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 px-3.5 py-2.5 text-sm"
+                  />
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60 cursor-pointer"
+                  >
+                    <Lock className="w-4 h-4" />
+                    {isLoading
+                      ? 'Autenticando...'
+                      : authTab === 'register'
+                      ? 'Criar Conta e Acessar'
+                      : 'Entrar na Plataforma'}
+                  </button>
+                </form>
+
+                {authTab === 'register' && (
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    A primeira conta criada neste banco local assume automaticamente o perfil de Administrador.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="mt-8 flex flex-wrap items-center gap-4">
+                <button
+                  type="button"
+                  onClick={handleGoogleLogin}
+                  disabled={isLoading}
+                  className="inline-flex items-center gap-3 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 px-5 py-3 text-sm font-semibold text-slate-800 dark:text-slate-100 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer disabled:opacity-60"
+                >
+                  <svg className="w-5 h-5 shrink-0" viewBox="0 0 48 48" aria-hidden="true">
+                    <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
+                    <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
+                    <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
+                    <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
+                  </svg>
+                  {isLoading ? 'Conectando sua conta...' : 'Entrar com Google'}
+                </button>
+
+                <span className="text-xs text-slate-500 dark:text-slate-400">
+                  Acesso completo liberado para avaliação inicial
+                </span>
+              </div>
+            )}
 
             {error && (
               <p className="mt-4 text-sm text-red-600 dark:text-red-400 font-medium">

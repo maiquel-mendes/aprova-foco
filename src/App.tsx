@@ -11,7 +11,6 @@ import {
   Timer,
   UserCircle2,
 } from 'lucide-react';
-import type { User as FirebaseUser } from 'firebase/auth';
 import { AccountModal } from './components/AccountModal';
 import { CommunityView } from './components/CommunityView';
 import { DashboardView } from './components/DashboardView';
@@ -22,18 +21,16 @@ import { PdfAndScraperView } from './components/PdfAndScraperView';
 import { QuestionBankView } from './components/QuestionBankView';
 import { SignInScreen } from './components/SignInScreen';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
-import { initAuthListener } from './lib/firebase';
-import {
-  fetchOfflinePackQuestions,
-  submitQuestionAttempt,
-  syncCurrentUserAndWorkspace,
-  updateMyPreferences,
-} from './lib/firestoreDb';
 import {
   clearPendingAttempts,
   getPendingAttempts,
   loadOfflineQuestions,
 } from './lib/offlineDb';
+import {
+  type AuthSessionUser,
+  getAuthProvider,
+  getRepositories,
+} from './repositories';
 import type {
   AchievementBadge,
   QuestionItem,
@@ -45,9 +42,11 @@ import type {
 type ActiveSection = 'questions' | 'pdfs' | 'dashboard' | 'exams' | 'community';
 
 function AppShell() {
+  const authProvider = getAuthProvider();
+  const repos = getRepositories();
   const isOnline = useOnlineStatus();
   const [authChecked, setAuthChecked] = useState(false);
-  const [fbUser, setFbUser] = useState<FirebaseUser | null>(null);
+  const [sessionUser, setSessionUser] = useState<AuthSessionUser | null>(null);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
 
   const [section, setSection] = useState<ActiveSection>('questions');
@@ -72,24 +71,24 @@ function AppShell() {
   }, [theme]);
 
   useEffect(() => {
-    const unsub = initAuthListener(
+    const unsub = authProvider.initAuthListener(
       (user) => {
-        setFbUser(user);
+        setSessionUser(user);
         setAuthChecked(true);
       },
       () => {
-        setFbUser(null);
+        setSessionUser(null);
         setUserProfile(null);
         setAuthChecked(true);
       }
     );
     return () => unsub();
-  }, []);
+  }, [authProvider]);
 
   const loadAccountState = useCallback(async () => {
-    if (!fbUser) return;
+    if (!sessionUser) return;
     try {
-      const data = await syncCurrentUserAndWorkspace(fbUser);
+      const data = await repos.users.syncWorkspace(sessionUser);
       setUserProfile(data.user);
       setProfiles(data.profiles);
       setAchievements(data.achievements);
@@ -103,7 +102,7 @@ function AppShell() {
     } catch (err) {
       console.error('Failed to sync workspace:', err);
     }
-  }, [fbUser]);
+  }, [sessionUser, repos]);
 
   useEffect(() => {
     loadAccountState();
@@ -119,7 +118,7 @@ function AppShell() {
   }, [refreshPendingOfflineCount]);
 
   const syncOfflineAttemptsNow = useCallback(async () => {
-    if (!isOnline || !fbUser) return;
+    if (!isOnline || !sessionUser) return;
     const pending = await getPendingAttempts().catch(() => []);
     if (pending.length === 0) return;
 
@@ -127,13 +126,15 @@ function AppShell() {
     try {
       const cached = await loadOfflineQuestions().catch(() => []);
       const cloudPack =
-        cached.length > 0 ? cached : await fetchOfflinePackQuestions().catch(() => []);
+        cached.length > 0
+          ? cached
+          : await repos.questions.fetchOfflinePack().catch(() => []);
       const qMap = new Map(cloudPack.map((q) => [q.id, q]));
 
       for (const att of pending) {
         const question = qMap.get(att.questionId);
         if (question) {
-          await submitQuestionAttempt(fbUser.uid, {
+          await repos.questions.submitAttempt(sessionUser.uid, {
             question,
             selectedOption: att.selectedOption,
             timeSpentSec: att.timeSpentSec,
@@ -146,21 +147,21 @@ function AppShell() {
     } finally {
       setIsSyncingOffline(false);
     }
-  }, [isOnline, fbUser, loadAccountState]);
+  }, [isOnline, sessionUser, repos, loadAccountState]);
 
   useEffect(() => {
-    if (isOnline && fbUser && pendingOfflineCount > 0) {
+    if (isOnline && sessionUser && pendingOfflineCount > 0) {
       syncOfflineAttemptsNow();
     }
-  }, [isOnline, fbUser, pendingOfflineCount, syncOfflineAttemptsNow]);
+  }, [isOnline, sessionUser, pendingOfflineCount, syncOfflineAttemptsNow]);
 
   const handleToggleTheme = async () => {
     const nextTheme = theme === 'light' ? 'dark' : 'light';
     setTheme(nextTheme);
-    if (fbUser) {
-      updateMyPreferences(fbUser.uid, { preferredTheme: nextTheme }).catch(
-        () => {}
-      );
+    if (sessionUser) {
+      repos.users
+        .updatePreferences(sessionUser.uid, { preferredTheme: nextTheme })
+        .catch(() => {});
     }
   };
 
@@ -181,7 +182,7 @@ function AppShell() {
     );
   }
 
-  if (!fbUser) {
+  if (!sessionUser) {
     return (
       <SignInScreen
         theme={theme}

@@ -1,10 +1,17 @@
-import { getFirebaseIdToken } from './firebase';
+import { getAuthProvider } from '../repositories';
+
+function resolveApiUrl(path: string): string {
+  const base = (import.meta.env.VITE_API_BASE_URL || '').trim();
+  if (!base) return path;
+  const cleanBase = base.endsWith('/') ? base.slice(0, -1) : base;
+  return `${cleanBase}${path.startsWith('/') ? path : `/${path}`}`;
+}
 
 export async function apiFetch<T>(
   path: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const token = await getFirebaseIdToken();
+  const token = await getAuthProvider().getAccessToken();
   const headers = new Headers(options.headers || {});
   if (token) {
     headers.set('Authorization', `Bearer ${token}`);
@@ -17,7 +24,7 @@ export async function apiFetch<T>(
     headers.set('Content-Type', 'application/json');
   }
 
-  const res = await fetch(path, {
+  const res = await fetch(resolveApiUrl(path), {
     ...options,
     headers,
   });

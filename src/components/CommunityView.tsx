@@ -6,15 +6,7 @@ import {
   ThumbsUp,
   Users,
 } from 'lucide-react';
-import { getFirebaseIdToken } from '../lib/firebase';
-import {
-  createForumPost,
-  fetchChatHistory,
-  fetchForumPosts,
-  replyForumPost,
-  saveChatMessage,
-  upvoteForumPost,
-} from '../lib/firestoreDb';
+import { getAuthProvider, getRepositories } from '../repositories';
 import type {
   ChatMessageItem,
   ForumPostItem,
@@ -41,6 +33,8 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
   linkedQuestion,
   onClearLinkedQuestion,
 }) => {
+  const repos = getRepositories();
+  const authProvider = getAuthProvider();
   const [tab, setTab] = useState<'forum' | 'chat'>('forum');
 
   // Forum state
@@ -74,25 +68,28 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
 
   const loadForum = useCallback(async () => {
     try {
-      const list = await fetchForumPosts();
+      const list = await repos.community.listForumPosts();
       setPosts(list);
     } catch {
       // ignore offline
     }
-  }, []);
+  }, [repos]);
 
   useEffect(() => {
     loadForum();
   }, [loadForum]);
 
-  const loadChatHistory = useCallback(async (targetRoom: string) => {
-    try {
-      const list = await fetchChatHistory(targetRoom);
-      setMessages(list);
-    } catch {
-      // ignore
-    }
-  }, []);
+  const loadChatHistory = useCallback(
+    async (targetRoom: string) => {
+      try {
+        const list = await repos.community.listChatMessages(targetRoom);
+        setMessages(list);
+      } catch {
+        // ignore
+      }
+    },
+    [repos]
+  );
 
   useEffect(() => {
     if (tab !== 'chat') return;
@@ -103,10 +100,13 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
     const displayName = user.displayName || user.email.split('@')[0];
 
     (async () => {
-      const token = await getFirebaseIdToken();
+      const token = await authProvider.getAccessToken();
       if (closed) return;
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${protocol}//${window.location.host}/ws?room=${encodeURIComponent(
+      const apiBase = (import.meta.env.VITE_API_BASE_URL || '').trim();
+      const wsBase = apiBase
+        ? apiBase.replace(/^http/i, 'ws').replace(/\/$/, '')
+        : `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`;
+      const wsUrl = `${wsBase}/ws?room=${encodeURIComponent(
         room
       )}&token=${encodeURIComponent(token || '')}&name=${encodeURIComponent(
         displayName
@@ -147,14 +147,22 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
       }
       wsRef.current = null;
     };
-  }, [tab, room, loadChatHistory, user.displayName, user.email, user.level]);
+  }, [
+    tab,
+    room,
+    loadChatHistory,
+    authProvider,
+    user.displayName,
+    user.email,
+    user.level,
+  ]);
 
   const handleCreatePost = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !body.trim()) return;
     setSubmittingPost(true);
     try {
-      const created = await createForumPost(user, {
+      const created = await repos.community.createForumPost(user, {
         title,
         subject,
         body,
@@ -172,13 +180,13 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
   const handleReplyPost = async (postId: string) => {
     const text = replyDrafts[postId]?.trim();
     if (!text) return;
-    const updated = await replyForumPost(postId, user, text);
+    const updated = await repos.community.replyForumPost(postId, user, text);
     setPosts((prev) => prev.map((p) => (p.id === postId ? updated : p)));
     setReplyDrafts((prev) => ({ ...prev, [postId]: '' }));
   };
 
   const handleUpvote = async (postId: string) => {
-    const updated = await upvoteForumPost(postId);
+    const updated = await repos.community.upvoteForumPost(postId);
     setPosts((prev) => prev.map((p) => (p.id === postId ? updated : p)));
   };
 
@@ -188,7 +196,7 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
     if (!clean) return;
     setChatInput('');
     try {
-      const saved = await saveChatMessage(user, room, clean);
+      const saved = await repos.community.saveChatMessage(user, room, clean);
       setMessages((prev) => {
         if (prev.some((m) => m.id === saved.id)) return prev;
         return [...prev, saved];
@@ -426,7 +434,7 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
                 {CHAT_ROOMS.find((r) => r.id === room)?.label}
               </h3>
               <span className="text-xs text-slate-500 dark:text-slate-400">
-                Histórico sincronizado na nuvem
+                Histórico sincronizado
               </span>
             </div>
 

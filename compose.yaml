@@ -1,0 +1,48 @@
+services:
+  db:
+    image: docker.io/library/postgres:16-alpine
+    container_name: aprovafoco-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-aprovafoco}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-aprovafoco_dev_local}
+      POSTGRES_DB: ${POSTGRES_DB:-aprovafoco}
+    ports:
+      - "5432:5432"
+    volumes:
+      - aprovafoco_pgdata:/var/lib/postgresql/data:Z
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-aprovafoco} -d ${POSTGRES_DB:-aprovafoco}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Opcional: suba também a aplicação containerizada com:
+  # podman compose --profile full up --build -d
+  app:
+    profiles: ["full"]
+    build:
+      context: .
+      dockerfile: Containerfile
+      args:
+        VITE_DATA_DRIVER: postgres
+        VITE_API_BASE_URL: ""
+    container_name: aprovafoco-app
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PORT: 3000
+      NODE_ENV: production
+      DATA_DRIVER: postgres
+      VITE_DATA_DRIVER: postgres
+      DATABASE_URL: postgres://${POSTGRES_USER:-aprovafoco}:${POSTGRES_PASSWORD:-aprovafoco_dev_local}@db:5432/${POSTGRES_DB:-aprovafoco}
+      AUTH_SECRET: ${AUTH_SECRET:-troque_este_segredo_em_producao}
+      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-maiquelbsb@gmail.com}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
+    ports:
+      - "3000:3000"
+
+volumes:
+  aprovafoco_pgdata:

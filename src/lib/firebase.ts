@@ -14,6 +14,11 @@ export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
 
 async function testConnection() {
+  const driver = (import.meta.env.VITE_DATA_DRIVER || 'firebase')
+    .trim()
+    .toLowerCase();
+  if (driver !== 'firebase') return;
+
   try {
     await getDocFromServer(doc(db, 'test', 'connection'));
   } catch (error) {

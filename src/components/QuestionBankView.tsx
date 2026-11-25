@@ -16,16 +16,11 @@ import {
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { apiFetch } from '../lib/api';
 import {
-  deleteQuestion,
-  fetchOfflinePackQuestions,
-  queryQuestions,
-  submitQuestionAttempt,
-} from '../lib/firestoreDb';
-import {
   loadOfflineQuestions,
   queueOfflineAttempt,
   saveOfflineQuestions,
 } from '../lib/offlineDb';
+import { getRepositories } from '../repositories';
 import type { QuestionItem, UserProfile } from '../types';
 import { ConfirmDialog } from './ConfirmDialog';
 import { QuestionFormModal } from './QuestionFormModal';
@@ -72,6 +67,7 @@ export const QuestionBankView: React.FC<QuestionBankViewProps> = ({
   onOpenForumForQuestion,
   onQuestionsMutated,
 }) => {
+  const repos = getRepositories();
   const isOnline = useOnlineStatus();
   const canManageQuestions =
     currentUser.role === 'admin' || currentUser.role === 'editor';
@@ -141,7 +137,7 @@ export const QuestionBankView: React.FC<QuestionBankViewProps> = ({
         return;
       }
 
-      const data = await queryQuestions(currentUser.uid, {
+      const data = await repos.questions.query(currentUser.uid, {
         board,
         career,
         subject,
@@ -160,6 +156,7 @@ export const QuestionBankView: React.FC<QuestionBankViewProps> = ({
       setLoading(false);
     }
   }, [
+    repos,
     currentUser.uid,
     board,
     career,
@@ -181,7 +178,7 @@ export const QuestionBankView: React.FC<QuestionBankViewProps> = ({
   const handleDownloadOfflinePack = async () => {
     setDownloadingOffline(true);
     try {
-      const offlineQuestions = await fetchOfflinePackQuestions();
+      const offlineQuestions = await repos.questions.fetchOfflinePack();
       await saveOfflineQuestions(offlineQuestions);
       setFeedbackBanner(
         `${offlineQuestions.length} questões comentadas salvas no dispositivo para estudo offline.`
@@ -231,7 +228,7 @@ export const QuestionBankView: React.FC<QuestionBankViewProps> = ({
         return;
       }
 
-      const res = await submitQuestionAttempt(currentUser.uid, {
+      const res = await repos.questions.submitAttempt(currentUser.uid, {
         question: q,
         selectedOption: chosen,
         timeSpentSec: 45,
@@ -319,7 +316,7 @@ export const QuestionBankView: React.FC<QuestionBankViewProps> = ({
     setDeleting(true);
     setError(null);
     try {
-      await deleteQuestion(deleteTarget.id);
+      await repos.questions.delete(deleteTarget.id);
       setQuestions((prev) => prev.filter((q) => q.id !== deleteTarget.id));
       setTotal((t) => Math.max(0, t - 1));
       setFeedbackBanner(`Questão ${deleteTarget.code} removida do banco.`);

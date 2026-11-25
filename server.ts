@@ -5,12 +5,15 @@ import express from 'express';
 import multer from 'multer';
 import { WebSocketServer, WebSocket } from 'ws';
 import { adminAuth } from './src/lib/firebase-admin.ts';
-import { AuthRequest, requireAuth } from './src/middleware/auth.ts';
+import { AuthRequest, requireAuth, requireRole } from './src/middleware/auth.ts';
+import { verifyLocalBearerToken } from './src/server/auth/localJwt.ts';
+import { isPostgresDriver } from './src/server/db/client.ts';
 import {
   extractQuestionsFromPdf,
   generateAdaptiveDiagnosis,
   generateQuestionTutorReply,
 } from './src/server/gemini.ts';
+import { createV1Router } from './src/server/routes/v1.ts';
 import {
   OFFICIAL_PORTAL_PRESETS,
   scrapeOfficialPortalQuestions,
@@ -18,6 +21,29 @@ import {
 
 const app = express();
 app.use(express.json({ limit: '4mb' }));
+
+const allowedCorsOrigin = (process.env.CORS_ORIGIN || '').trim();
+if (allowedCorsOrigin && allowedCorsOrigin !== '*') {
+  app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    if (origin && origin === allowedCorsOrigin) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Vary', 'Origin');
+      res.setHeader(
+        'Access-Control-Allow-Methods',
+        'GET,POST,PUT,PATCH,DELETE,OPTIONS'
+      );
+      res.setHeader(
+        'Access-Control-Allow-Headers',
+        'Authorization,Content-Type'
+      );
+    }
+    if (req.method === 'OPTIONS') {
+      return res.sendStatus(204);
+    }
+    next();
+  });
+}
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -35,12 +61,19 @@ const upload = multer({
 });
 
 app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', service: 'aprovafoco-api' });
+  res.json({
+    status: 'ok',
+    service: 'aprovafoco-api',
+    driver: isPostgresDriver() ? 'postgres' : 'firebase',
+  });
 });
+
+app.use('/api/v1', createV1Router());
 
 app.post(
   '/api/pdfs/extract',
   requireAuth,
+  requireRole('admin', 'editor'),
   upload.single('file'),
   async (req: AuthRequest, res) => {
     try {
@@ -81,11 +114,20 @@ app.post(
   }
 );
 
-app.get('/api/scraper/sources', requireAuth, (_req, res) => {
-  res.json({ sources: OFFICIAL_PORTAL_PRESETS });
-});
+app.get(
+  '/api/scraper/sources',
+  requireAuth,
+  requireRole('admin'),
+  (_req, res) => {
+    res.json({ sources: OFFICIAL_PORTAL_PRESETS });
+  }
+);
 
-app.post('/api/scraper/run', requireAuth, async (req: AuthRequest, res) => {
+app.post(
+  '/api/scraper/run',
+  requireAuth,
+  requireRole('admin'),
+  async (req: AuthRequest, res) => {
   try {
     const { sourceName, sourceUrl, board, career } = req.body ?? {};
     if (!sourceUrl || !board || !career) {
@@ -242,14 +284,26 @@ wss.on('connection', async (ws, req) => {
 
   if (token) {
     try {
-      const decoded = await adminAuth.verifyIdToken(token);
-      meta.uid = decoded.uid;
-      meta.displayName =
-        nameParam?.trim() ||
-        decoded.name ||
-        decoded.email?.split('@')[0] ||
-        'Estudante';
-      meta.level = Math.max(1, Math.min(1000, levelParam));
+      if (isPostgresDriver()) {
+        const localPayload = verifyLocalBearerToken(token);
+        if (localPayload) {
+          meta.uid = localPayload.uid;
+          meta.displayName =
+            nameParam?.trim() ||
+            localPayload.email.split('@')[0] ||
+            'Estudante';
+          meta.level = Math.max(1, Math.min(1000, levelParam));
+        }
+      } else {
+        const decoded = await adminAuth.verifyIdToken(token);
+        meta.uid = decoded.uid;
+        meta.displayName =
+          nameParam?.trim() ||
+          decoded.name ||
+          decoded.email?.split('@')[0] ||
+          'Estudante';
+        meta.level = Math.max(1, Math.min(1000, levelParam));
+      }
     } catch {
       // Unauthenticated WS client stays read-only
     }

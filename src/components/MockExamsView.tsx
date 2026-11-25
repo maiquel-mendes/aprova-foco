@@ -8,11 +8,7 @@ import {
   Trophy,
   XCircle,
 } from 'lucide-react';
-import {
-  fetchMockExamsAndRankings,
-  queryQuestions,
-  submitMockExamToFirestore,
-} from '../lib/firestoreDb';
+import { getRepositories } from '../repositories';
 import type {
   MockExamRecord,
   QuestionItem,
@@ -41,6 +37,7 @@ export const MockExamsView: React.FC<MockExamsViewProps> = ({
   onUserUpdated,
   rankingRefreshSignal,
 }) => {
+  const repos = getRepositories();
   const [phase, setPhase] = useState<'setup' | 'running' | 'report'>('setup');
   const [title, setTitle] = useState('Simulado Nacional Multi-Bancas');
   const [board, setBoard] = useState('Todas');
@@ -65,13 +62,13 @@ export const MockExamsView: React.FC<MockExamsViewProps> = ({
 
   const loadLeaderboard = useCallback(async () => {
     try {
-      const data = await fetchMockExamsAndRankings(user.uid);
+      const data = await repos.mockExams.listAndRankings(user.uid);
       setMyExams(data.myExams);
       setRankings(data.rankings);
     } catch {
       // ignore background refresh error
     }
-  }, [user.uid]);
+  }, [repos, user.uid]);
 
   useEffect(() => {
     loadLeaderboard();
@@ -85,7 +82,7 @@ export const MockExamsView: React.FC<MockExamsViewProps> = ({
       const totalDurationSec = durationMinutes * 60;
       const elapsedSeconds = Math.max(10, totalDurationSec - secondsLeft);
 
-      const res = await submitMockExamToFirestore(user.uid, {
+      const res = await repos.mockExams.submit(user.uid, {
         title,
         board,
         career,
@@ -111,6 +108,7 @@ export const MockExamsView: React.FC<MockExamsViewProps> = ({
     examQuestions,
     durationMinutes,
     secondsLeft,
+    repos,
     user.uid,
     title,
     board,
@@ -137,7 +135,7 @@ export const MockExamsView: React.FC<MockExamsViewProps> = ({
     setStarting(true);
     setError(null);
     try {
-      const data = await queryQuestions(user.uid, {
+      const data = await repos.questions.query(user.uid, {
         board,
         career,
         limitCount: questionLimit,

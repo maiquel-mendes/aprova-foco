@@ -9,12 +9,7 @@ import {
   UserCheck,
   X,
 } from 'lucide-react';
-import { signOutUser } from '../lib/firebase';
-import {
-  activateStudyProfile,
-  createStudyProfile,
-  updateMyPreferences,
-} from '../lib/firestoreDb';
+import { getAuthProvider, getRepositories } from '../repositories';
 import type { StudyGoalProfile, UserProfile } from '../types';
 import { PWAInstallButton } from './PWAInstallButton';
 
@@ -39,6 +34,8 @@ export const AccountModal: React.FC<AccountModalProps> = ({
   onProfilesChanged,
   onClose,
 }) => {
+  const repos = getRepositories();
+  const authProvider = getAuthProvider();
   const [newProfileName, setNewProfileName] = useState('');
   const [newCareer, setNewCareer] = useState('Policial');
   const [newBoard, setNewBoard] = useState('Cebraspe');
@@ -69,7 +66,7 @@ export const AccountModal: React.FC<AccountModalProps> = ({
   const handleActivateProfile = async (id: string) => {
     setBusy(true);
     try {
-      await activateStudyProfile(user.uid, id);
+      await repos.users.activateStudyProfile(user.uid, id);
       onProfilesChanged();
     } finally {
       setBusy(false);
@@ -81,7 +78,7 @@ export const AccountModal: React.FC<AccountModalProps> = ({
     if (!newProfileName.trim()) return;
     setBusy(true);
     try {
-      await createStudyProfile(user.uid, {
+      await repos.users.createStudyProfile(user.uid, {
         name: newProfileName,
         career: newCareer,
         targetBoard: newBoard,
@@ -99,7 +96,7 @@ export const AccountModal: React.FC<AccountModalProps> = ({
     setProfileFeedback(null);
     setProfileError(null);
     try {
-      const updated = await updateMyPreferences(user.uid, {
+      const updated = await repos.users.updatePreferences(user.uid, {
         displayName: displayName.trim(),
         dailyGoal,
       });
@@ -328,7 +325,7 @@ export const AccountModal: React.FC<AccountModalProps> = ({
           <button
             type="button"
             onClick={async () => {
-              await signOutUser();
+              await authProvider.signOut();
               onClose();
             }}
             className="w-full inline-flex items-center justify-center gap-2 rounded-lg border border-red-200 dark:border-red-900 py-2.5 text-sm font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 cursor-pointer"

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Loader2, Plus, Trash2, X } from 'lucide-react';
-import { createManualQuestion, updateQuestion } from '../lib/firestoreDb';
+import { getRepositories } from '../repositories';
 import type { QuestionItem, QuestionOption } from '../types';
 
 interface QuestionFormModalProps {
@@ -184,10 +184,11 @@ export const QuestionFormModal: React.FC<QuestionFormModalProps> = ({
           commentary.trim() || 'Comentário cadastrado pela equipe editorial.',
       };
 
+      const repos = getRepositories();
       const saved =
         isEdit && initialQuestion
-          ? await updateQuestion(initialQuestion.id, payload)
-          : await createManualQuestion(currentUserUid, payload);
+          ? await repos.questions.update(initialQuestion.id, payload)
+          : await repos.questions.create(payload, { uid: currentUserUid });
 
       onSaved(saved, isEdit);
       onClose();
